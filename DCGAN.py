@@ -3,6 +3,7 @@ refer to
 https://github.com/YutaroOgawa/pytorch_advanced/blob/master/5_gan_generation/5-1-2_DCGAN.ipynb
 '''
 
+import os
 import random
 import math
 import time
@@ -19,6 +20,51 @@ import torch.optim as optim
 from torchvision import transforms
 
 import matplotlib.pyplot as plt
+
+import sklearn
+from sklearn.datasets import fetch_openml
+
+def data_preparation_for_dcgan():
+    data_dir = "./data/"
+    if not os.path.exists(data_dir):
+        os.mkdir(data_dir)
+
+    mnist = fetch_openml('mnist_784', version=1, data_home="./data/")  
+
+    def test_loading_mnist(mnist, visualize=False):
+        X = mnist.data
+        y = mnist.target
+
+        if visualize:
+            plt.imshow(X[0].reshape(28, 28), cmap='gray')
+        return X, y
+
+    X, y = test_loading_mnist(mnist)
+
+    data_dir_path = "./data/img_78/"
+    if not os.path.exists(data_dir_path):
+        os.mkdir(data_dir_path)
+
+    count7=0
+    count8=0
+    max_num=200
+
+    for i in range(len(X)):
+        if (y[i] is "7") and (count7<max_num):
+            file_path="./data/img_78/img_7_"+str(count7)+".jpg"
+            im_f=(X[i].reshape(28, 28)) 
+            pil_img_f = Image.fromarray(im_f.astype(np.uint8))
+            pil_img_f = pil_img_f.resize((64, 64), Image.BICUBIC)
+            pil_img_f.save(file_path)
+            count7+=1 
+        
+        if (y[i] is "8") and (count8<max_num):
+            file_path="./data/img_78/img_8_"+str(count8)+".jpg"
+            im_f=(X[i].reshape(28, 28))
+            pil_img_f = Image.fromarray(im_f.astype(np.uint8))
+            pil_img_f = pil_img_f.resize((64, 64), Image.BICUBIC)
+            pil_img_f.save(file_path)
+            count8+=1
 
 class Generator(nn.Module):
     def __init__(self, z_dim=20, image_size=64):
@@ -162,6 +208,39 @@ def weights_init(m):
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         nn.init.constant_(m.bias.data, 0)
 
+def test_trained_result(model, iteration):
+    train_img_list = make_datapath_list()
+
+    mean = (0.5,)
+    std = (0.5,)
+    train_dataset = GAN_Img_Dataset(
+        file_list=train_img_list, transform=ImageTransform(mean, std))
+    
+    batch_size = 64
+    train_dataloader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True)
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    batch_size = 8
+    z_dim = 20
+    fixed_z = torch.randn(batch_size, z_dim)
+    fixed_z = fixed_z.view(fixed_z.size(0), fixed_z.size(1), 1, 1)
+
+    fake_images = model(fixed_z.to(device))
+
+    batch_iterator = iter(train_dataloader)
+    imges = next(batch_iterator)
+
+    fig = plt.figure(figsize=(15, 6))
+    for i in range(0, 5):
+        plt.subplot(2, 5, i+1)
+        plt.imshow(imges[i][0].cpu().detach().numpy(), 'gray')
+
+        plt.subplot(2, 5, 5+i+1)
+        plt.imshow(fake_images[i][0].cpu().detach().numpy(), 'gray')
+    plt.savefig("images/{}.png".format(iteration))
+
 def train_model(G, D, dataloader, num_epochs):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print('currently use:', device)
@@ -190,6 +269,9 @@ def train_model(G, D, dataloader, num_epochs):
 
     iteration = 1
     logs = []
+
+    os.makedirs('./images/', exist_ok=True)
+    sample_interval = 200
 
     for epoch in range(num_epochs):
         t_epoch_start = time.time()
@@ -242,7 +324,11 @@ def train_model(G, D, dataloader, num_epochs):
 
             epoch_d_loss += d_loss.item()
             epoch_g_loss += g_loss.item()
+
             iteration += 1
+
+            if iteration % sample_interval == 0:
+              test_trained_result(G, iteration)
         
         t_epoch_finish = time.time()
         print('-------------')
@@ -281,34 +367,6 @@ def train():
 
     return G_update, D_update
 
-def test_trained_result(model):
-    train_img_list = make_datapath_list()
-
-    mean = (0.5,)
-    std = (0.5,)
-    train_dataset = GAN_Img_Dataset(
-        file_list=train_img_list, transform=ImageTransform(mean, std))
-    
-    batch_size = 64
-    train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True)
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    batch_size = 8
-    z_dim = 20
-    fixed_z = torch.randn(batch_size, z_dim)
-    fixed_z = fixed_z.view(fixed_z.size(0), fixed_z.size(1), 1, 1)
-
-    fake_images = model(fixed_z.to(device))
-
-    batch_iterator = iter(train_dataloader)
-    imges = next(batch_iterator)
-
-    fig = plt.figure(figsize=(15, 6))
-    for i in range(0, 5):
-        plt.subplot(2, 5, i+1)
-        plt.imshow(imges[i][0].cpu().detach().numpy(), 'gray')
-
-        plt.subplot(2, 5, 5+i+1)
-        plt.imshow(fake_images[i][0].cpu().detach().numpy(), 'gray')
+if __name__=='__main__':
+    data_preparation_for_dcgan()
+    train()
