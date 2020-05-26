@@ -130,11 +130,11 @@ def train_model(G, D, opt, dataloader, num_epochs):
 
     os.makedirs('./images/', exist_ok=True)
 
+    iteration = 0
     for epoch in range(num_epochs):
         t_epoch_start = time.time()
         epoch_g_loss = 0.0
         epoch_d_loss = 0.0
-        iteration = 0
 
         print('----------')
         print('Epoch {}/{}'.format(epoch, num_epochs))
